@@ -64,6 +64,9 @@ COR_ROXO = "#7c3aed"
 COR_LARANJA = "#f97316"
 COR_LIMAO = "#84cc16"
 
+# Fuso horário de Brasília (GMT-3, sem horário de verão atualmente)
+TZ_BRASIL = datetime.timezone(datetime.timedelta(hours=-3), name="GMT-3")
+
 
 # --------------------------------------------------------------------------
 # Google Drive — serviço
@@ -114,6 +117,32 @@ def drive_enviar(pasta_id, nome_arquivo, dados_bytes, mimetype):
     meta = {"name": nome_arquivo, "parents": [pasta_id]}
     media = MediaIoBaseUpload(io.BytesIO(dados_bytes), mimetype=mimetype, resumable=False)
     servico.files().create(body=meta, media_body=media, fields="id").execute()
+
+
+def drive_obter_ou_criar_pasta(pasta_pai_id, nome_pasta):
+    """Procura uma subpasta com esse nome dentro de `pasta_pai_id`.
+
+    Se já existir (mesmo nome, mesma pasta-pai), reutiliza e devolve o id.
+    Caso contrário, cria a pasta e devolve o id da pasta nova.
+    """
+    servico = get_drive()
+    nome_escapado = nome_pasta.replace("\\", "\\\\").replace("'", "\\'")
+    query = (
+        f"'{pasta_pai_id}' in parents and name = '{nome_escapado}' "
+        "and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+    )
+    resultado = servico.files().list(q=query, fields="files(id, name)", pageSize=1).execute()
+    encontradas = resultado.get("files", [])
+    if encontradas:
+        return encontradas[0]["id"]
+
+    meta = {
+        "name": nome_pasta,
+        "mimeType": "application/vnd.google-apps.folder",
+        "parents": [pasta_pai_id],
+    }
+    pasta_nova = servico.files().create(body=meta, fields="id").execute()
+    return pasta_nova["id"]
 
 
 def drive_baixar(arquivo_id):
@@ -373,13 +402,14 @@ def enviar():
         flash(f"Tipo de arquivo não permitido ({ext}).", "erro")
         return redirect(url_for("inicio"))
 
-    # Nome final: NomeDoAluno_projeto_AAAAMMDD_HHMM.sb3
-    carimbo = datetime.datetime.now().strftime("%Y%m%d_%H%M")
+    # Nome final: NomeDoAluno_projeto_AAAAMMDD_HHMM.sb3 (horário de Brasília, GMT-3)
+    carimbo = datetime.datetime.now(TZ_BRASIL).strftime("%Y%m%d_%H%M")
     nome_final = f"{nome_aluno}_projeto_{carimbo}{ext}"
 
     try:
+        pasta_aluno_id = drive_obter_ou_criar_pasta(DRIVE_PASTA_UPLOADS, nome_aluno)
         dados = arquivo.read()
-        drive_enviar(DRIVE_PASTA_UPLOADS, nome_final, dados, arquivo.mimetype or "application/octet-stream")
+        drive_enviar(pasta_aluno_id, nome_final, dados, arquivo.mimetype or "application/octet-stream")
         flash(f"Projeto enviado com sucesso! 🎉 ({nome_final})", "sucesso")
     except Exception as e:
         flash(f"Erro ao enviar: {e}", "erro")

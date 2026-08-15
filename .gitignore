@@ -1,0 +1,4 @@
+client_secret.json
+__pycache__/*
+.claude
+.DS_Store
