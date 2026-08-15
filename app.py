@@ -12,11 +12,18 @@ O que mudou em relação à versão LAN:
   - Arquivos base para download também ficam no Google Drive (pasta separada).
 
 Variáveis de ambiente necessárias (configuradas no painel do Render):
-  SENHA_TURMA          -> senha única compartilhada com os alunos
-  FLASK_SECRET         -> string aleatória p/ assinar a sessão (qualquer texto longo)
-  GOOGLE_CREDENTIALS   -> conteúdo JSON da conta de serviço do Google (colar inteiro)
-  DRIVE_PASTA_UPLOADS  -> ID da pasta do Drive onde os projetos enviados são salvos
-  DRIVE_PASTA_BASE     -> ID da pasta do Drive com os arquivos base p/ download
+  SENHA_TURMA            -> senha única compartilhada com os alunos
+  FLASK_SECRET           -> string aleatória p/ assinar a sessão (qualquer texto longo)
+  GOOGLE_CLIENT_ID       -> client_id do OAuth (gerado por gerar_token.py)
+  GOOGLE_CLIENT_SECRET   -> client_secret do OAuth
+  GOOGLE_REFRESH_TOKEN   -> refresh token da SUA conta (gerado por gerar_token.py)
+  DRIVE_PASTA_UPLOADS    -> ID da pasta do Drive onde os projetos enviados são salvos
+  DRIVE_PASTA_BASE       -> ID da pasta do Drive com os arquivos base p/ download
+
+Autenticação: usa OAuth com refresh token (delegação), então os arquivos
+enviados vão para a SUA cota pessoal do Drive (15 GB+). Isso contorna o erro
+"Service Accounts do not have storage quota" que ocorre com conta de serviço
+em Gmail comum.
 """
 
 import os
@@ -32,7 +39,7 @@ from flask import (
 )
 
 # --- Google Drive ---
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 
@@ -63,13 +70,26 @@ COR_LIMAO = "#84cc16"
 # --------------------------------------------------------------------------
 
 def get_drive():
-    """Cria o cliente do Google Drive a partir da conta de serviço."""
-    cred_json = os.environ.get("GOOGLE_CREDENTIALS", "")
-    if not cred_json:
-        raise RuntimeError("GOOGLE_CREDENTIALS não configurada.")
-    info = json.loads(cred_json)
-    creds = service_account.Credentials.from_service_account_info(
-        info, scopes=["https://www.googleapis.com/auth/drive"]
+    """Cria o cliente do Google Drive usando OAuth (refresh token).
+
+    Os arquivos criados pertencem à SUA conta pessoal, então usam a sua cota
+    de armazenamento (evita o erro 'storageQuotaExceeded' da conta de serviço).
+    O access token de 1h é renovado automaticamente a partir do refresh token.
+    """
+    client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
+    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+    refresh_token = os.environ.get("GOOGLE_REFRESH_TOKEN", "")
+    if not (client_id and client_secret and refresh_token):
+        raise RuntimeError(
+            "Faltam GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET ou GOOGLE_REFRESH_TOKEN."
+        )
+    creds = Credentials(
+        token=None,  # sem access token inicial; será obtido pelo refresh
+        refresh_token=refresh_token,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=client_id,
+        client_secret=client_secret,
+        scopes=["https://www.googleapis.com/auth/drive"],
     )
     return build("drive", "v3", credentials=creds, cache_discovery=False)
 

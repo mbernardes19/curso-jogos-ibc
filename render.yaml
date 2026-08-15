@@ -1,8 +1,9 @@
 services:
   - type: web
-    name: curso-jogos-ibc
+    name: servidor-curso
     runtime: python
     plan: free
+    region: oregon
     buildCommand: "pip install -r requirements.txt"
     startCommand: "gunicorn app:app"
     envVars:
@@ -10,7 +11,11 @@ services:
         sync: false
       - key: FLASK_SECRET
         generateValue: true
-      - key: GOOGLE_CREDENTIALS
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REFRESH_TOKEN
         sync: false
       - key: DRIVE_PASTA_UPLOADS
         sync: false
