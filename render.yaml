@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: curso-jogos-ibc
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app"
+    envVars:
+      - key: SENHA_TURMA
+        sync: false
+      - key: FLASK_SECRET
+        generateValue: true
+      - key: GOOGLE_CREDENTIALS
+        sync: false
+      - key: DRIVE_PASTA_UPLOADS
+        sync: false
+      - key: DRIVE_PASTA_BASE
+        sync: false
