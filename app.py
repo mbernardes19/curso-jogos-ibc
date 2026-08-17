@@ -68,7 +68,7 @@ ARQUIVO_CONFIG_AULA = "_config_aula_atual.txt"
 CACHE_AULA_TTL_SEGUNDOS = 30
 
 # Extensões permitidas no upload (projetos Scratch e afins)
-EXTENSOES_OK = {".sb3", ".sb2", ".png", ".jpg", ".jpeg", ".zip"}
+EXTENSOES_OK = {".sb3"}
 TAMANHO_MAX_MB = 25
 app.config["MAX_CONTENT_LENGTH"] = TAMANHO_MAX_MB * 1024 * 1024
 
@@ -427,6 +427,37 @@ BASE_CSS = f"""
     margin-top: 8px;
     font-size: .92rem;
   }}
+  .acordeon {{
+    border: 2px solid #f3f4f6;
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }}
+  .acordeon:last-child {{ margin-bottom: 0; }}
+  .acordeon > summary {{
+    list-style: none;
+    cursor: pointer;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-weight: 800;
+    color: var(--laranja);
+    font-size: 1.05rem;
+  }}
+  .acordeon > summary::-webkit-details-marker {{ display: none; }}
+  .acordeon > summary::after {{
+    content: "▸";
+    color: var(--roxo);
+    font-size: 1.2rem;
+    font-weight: 800;
+    flex-shrink: 0;
+    transition: transform .2s;
+  }}
+  .acordeon[open] > summary::after {{ transform: rotate(90deg); }}
+  .acordeon > summary:hover {{ background: #faf5ff; }}
+  .acordeon > .conteudo-acordeon {{ padding: 0 20px 20px; }}
 """
 
 PAGINA_LOGIN = """
@@ -502,29 +533,6 @@ PAGINA_INICIO = """
   </div>
 
   <div class="cartao">
-    <h2>💾 Como salvar meu projeto?</h2>
-    <p class="subtitulo">Antes de enviar, você precisa salvar o seu projeto do Scratch no computador. Siga os passos:</p>
-    <ol class="tutorial">
-      <li>
-        No editor do Scratch, procure o menu <strong>Arquivo</strong> lá em cima, no canto esquerdo da tela.<br>
-        <span class="caminho">📁 Arquivo</span>
-      </li>
-      <li>
-        Clique em <strong>Arquivo</strong> e depois em <strong>Baixar para o seu computador</strong>.<br>
-        <span class="caminho">📁 Arquivo → 💾 Baixar para o seu computador</span>
-      </li>
-      <li>
-        Pronto! O Scratch vai salvar um arquivo que termina com <strong>.sb3</strong>.
-        Esse arquivo normalmente vai para a pasta <strong>Downloads</strong> do seu computador.
-        <div class="dica">💡 Dica: se não souber onde ficou, procure na pasta <strong>Downloads</strong> pelo arquivo mais novo terminando em <strong>.sb3</strong>.</div>
-      </li>
-      <li>
-        Agora é só descer até <strong>"Enviar o meu projeto"</strong> aqui embaixo, escolher esse arquivo <strong>.sb3</strong> e enviar. 🎉
-      </li>
-    </ol>
-  </div>
-
-  <div class="cartao">
     <h2>⬆️ Enviar o meu projeto</h2>
     <form method="post" action="{{ url_for('enviar') }}" enctype="multipart/form-data">
       <label for="nome">Seu nome</label>
@@ -538,10 +546,62 @@ PAGINA_INICIO = """
       </select>
 
       <label for="arquivo">Arquivo do projeto (.sb3)</label>
-      <input type="file" id="arquivo" name="arquivo" accept=".sb3,.sb2,.png,.jpg,.jpeg,.zip" required>
+      <input type="file" id="arquivo" name="arquivo" accept=".sb3" required>
 
       <button type="submit" class="botao-limao">Enviar projeto ✨</button>
     </form>
+  </div>
+
+  <div class="cartao">
+    <h2>❓ Dúvidas</h2>
+    <details class="acordeon">
+      <summary>📂 Como abrir um projeto?</summary>
+      <div class="conteudo-acordeon">
+        <p class="subtitulo">Quer continuar um projeto que você já tem salvo no computador (por exemplo, um dos arquivos base)? Siga os passos:</p>
+        <ol class="tutorial">
+          <li>
+            No editor do Scratch, procure o menu <strong>Arquivo</strong> lá em cima, no canto esquerdo da tela.<br>
+            <span class="caminho">📁 Arquivo</span>
+          </li>
+          <li>
+            Clique em <strong>Arquivo</strong> e depois em <strong>"Load from your computer"</strong>.<br>
+            <span class="caminho">📁 Arquivo → 📤 Load from your computer</span>
+            <div class="dica">💡 Dica: esse item aparece em <strong>inglês</strong> mesmo com o Scratch configurado em português — o Scratch não traduziu esse texto! "Load from your computer" quer dizer "Carregar do seu computador".</div>
+          </li>
+          <li>
+            Escolha o arquivo <strong>.sb3</strong> que você quer abrir (por exemplo, um que está na pasta <strong>Downloads</strong>) e clique para abrir.
+          </li>
+          <li>
+            Pronto! Seu projeto abre no editor e você já pode continuar editando. 🎨
+          </li>
+        </ol>
+      </div>
+    </details>
+
+    <details class="acordeon">
+      <summary>💾 Como salvar meu projeto?</summary>
+      <div class="conteudo-acordeon">
+        <p class="subtitulo">Antes de enviar, você precisa salvar o seu projeto do Scratch no computador. Siga os passos:</p>
+        <ol class="tutorial">
+          <li>
+            No editor do Scratch, procure o menu <strong>Arquivo</strong> lá em cima, no canto esquerdo da tela.<br>
+            <span class="caminho">📁 Arquivo</span>
+          </li>
+          <li>
+            Clique em <strong>Arquivo</strong> e depois em <strong>Baixar para o seu computador</strong>.<br>
+            <span class="caminho">📁 Arquivo → 💾 Baixar para o seu computador</span>
+          </li>
+          <li>
+            Pronto! O Scratch vai salvar um arquivo que termina com <strong>.sb3</strong>.
+            Esse arquivo normalmente vai para a pasta <strong>Downloads</strong> do seu computador.
+            <div class="dica">💡 Dica: se não souber onde ficou, procure na pasta <strong>Downloads</strong> pelo arquivo mais novo terminando em <strong>.sb3</strong>.</div>
+          </li>
+          <li>
+            Agora é só voltar para <strong>"Enviar o meu projeto"</strong> aqui em cima, escolher esse arquivo <strong>.sb3</strong> e enviar. 🎉
+          </li>
+        </ol>
+      </div>
+    </details>
   </div>
 
   <p class="rodape">
