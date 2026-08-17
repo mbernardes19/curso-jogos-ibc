@@ -20,6 +20,7 @@ Variáveis de ambiente necessárias (configuradas no painel do Render):
   DRIVE_PASTA_UPLOADS    -> ID da pasta do Drive onde os projetos enviados são salvos
   DRIVE_PASTA_BASE       -> ID da pasta do Drive com os arquivos base p/ download
   ADMIN_SENHA            -> senha do painel /admin (definir o número da aula do dia)
+  CACHE_ARQUIVOS_MAX_MB   -> (opcional) limite de RAM p/ cache de arquivos base (padrão 150)
 
 Número da aula atual: fica salvo num arquivinho de texto dentro da pasta do
 Drive de DRIVE_PASTA_UPLOADS (sobrevive a reinícios do Render, que apaga o
@@ -261,6 +262,45 @@ def definir_aula_atual(valor):
     drive_escrever_texto(DRIVE_PASTA_UPLOADS, ARQUIVO_CONFIG_AULA, valor or "")
     _cache_aula["valor"] = valor or None
     _cache_aula["expira"] = time.time() + CACHE_AULA_TTL_SEGUNDOS
+
+
+# --------------------------------------------------------------------------
+# Cache dos arquivos base (em memória, limpo manualmente pelo /admin)
+# --------------------------------------------------------------------------
+#
+# Os "arquivos base" (materiais da aula, baixados em /baixar/<id>) são os
+# mesmos para a turma inteira: sem cache, cada um dos ~12 alunos gera uma
+# chamada nova à API do Drive pra baixar o MESMO arquivo. Guardando os bytes
+# na memória do processo depois do primeiro download, os próximos alunos são
+# atendidos na hora, sem esperar o Drive nem gastar chamada de API.
+#
+# Fica em RAM (não em disco): o plano free do Render não permite disco
+# persistente e o container pode subir do zero a qualquer restart, então
+# "cache fixo em arquivo" não sobreviveria mesmo. Em memória já resolve bem
+# porque o processo fica de pé durante toda a aula.
+#
+# Isso NÃO reduz os dados que trafegam até o celular de cada aluno (cada um
+# ainda baixa o arquivo inteiro para o próprio aparelho) — o ganho aqui é
+# velocidade e menos chamadas à API do Drive. Quem ajuda a poupar dado do
+# celular é o Cache-Control abaixo, que evita reBAIXAR o mesmo arquivo se o
+# navegador do aluno já tiver uma cópia.
+
+CACHE_ARQUIVOS_MAX_MB = float(os.environ.get("CACHE_ARQUIVOS_MAX_MB", "150"))
+
+_cache_arquivos_base = {}   # arquivo_id -> {"nome": str, "dados": bytes, "tamanho": int}
+_cache_listagens = {}       # pasta_aula_id -> lista de arquivos (resultado de drive_listar)
+
+
+def cache_tamanho_mb():
+    """Quantos MB estão hoje ocupados pelo cache de arquivos base."""
+    total = sum(item["tamanho"] for item in _cache_arquivos_base.values())
+    return total / (1024 * 1024)
+
+
+def limpar_cache_arquivos():
+    """Esvazia o cache de listagens e de arquivos base (botão no /admin)."""
+    _cache_listagens.clear()
+    _cache_arquivos_base.clear()
 
 
 # --------------------------------------------------------------------------
@@ -684,6 +724,28 @@ PAGINA_ADMIN = """
       <button type="submit">Salvar aula ✅</button>
     </form>
   </div>
+
+  <div class="cartao">
+    <h2>🗂️ Cache dos arquivos base</h2>
+    <p class="subtitulo">
+      {% if cache_arquivos %}
+        {{ cache_arquivos }} arquivo(s) guardado(s) na memória do servidor
+        (~{{ cache_mb }} MB) — os alunos que baixarem agora recebem na hora,
+        sem esperar o Google Drive.
+      {% else %}
+        Cache vazio no momento. O primeiro download de cada arquivo base
+        busca no Drive e guarda na memória para os próximos alunos.
+      {% endif %}
+    </p>
+    <form method="post" action="{{ url_for('admin_limpar_cache') }}">
+      <button type="submit" class="botao-limao">Limpar cache 🧹</button>
+    </form>
+    <p class="rodape" style="margin-top:12px;">
+      Use isso se trocar os arquivos base no Drive durante a aula — senão os
+      alunos continuam recebendo a versão antiga guardada na memória.
+    </p>
+  </div>
+
   <p class="rodape">
     <a href="{{ url_for('admin_sair') }}" style="color:#9ca3af;">Sair do painel</a>
   </p>
@@ -742,7 +804,21 @@ def admin():
             except Exception as e:
                 flash(f"Erro ao salvar: {e}", "erro")
         return redirect(url_for("admin"))
-    return render_template_string(PAGINA_ADMIN, css=BASE_CSS, aula_atual=obter_aula_atual())
+    return render_template_string(
+        PAGINA_ADMIN,
+        css=BASE_CSS,
+        aula_atual=obter_aula_atual(),
+        cache_arquivos=len(_cache_arquivos_base),
+        cache_mb=round(cache_tamanho_mb(), 1),
+    )
+
+
+@app.route("/admin/limpar-cache", methods=["POST"])
+@admin_obrigatorio
+def admin_limpar_cache():
+    limpar_cache_arquivos()
+    flash("Cache de arquivos base limpo! Os próximos downloads vêm direto do Drive de novo.", "sucesso")
+    return redirect(url_for("admin"))
 
 
 @app.route("/")
@@ -754,7 +830,11 @@ def inicio():
         if aula_atual and DRIVE_PASTA_BASE:
             pasta_aula_id = drive_buscar_subpasta(DRIVE_PASTA_BASE, f"Aula {aula_atual}")
             if pasta_aula_id:
-                arquivos_base = drive_listar(pasta_aula_id)
+                if pasta_aula_id in _cache_listagens:
+                    arquivos_base = _cache_listagens[pasta_aula_id]
+                else:
+                    arquivos_base = drive_listar(pasta_aula_id)
+                    _cache_listagens[pasta_aula_id] = arquivos_base
     except Exception as e:
         flash(f"Não consegui listar os arquivos base: {e}", "erro")
     return render_template_string(
@@ -809,8 +889,25 @@ def enviar():
 @login_obrigatorio
 def baixar(arquivo_id):
     try:
-        buffer, nome = drive_baixar(arquivo_id)
-        return send_file(buffer, as_attachment=True, download_name=nome)
+        item_cache = _cache_arquivos_base.get(arquivo_id)
+        if item_cache:
+            buffer = io.BytesIO(item_cache["dados"])
+            nome = item_cache["nome"]
+        else:
+            buffer, nome = drive_baixar(arquivo_id)
+            dados = buffer.getvalue()
+            tamanho_mb = len(dados) / (1024 * 1024)
+            if cache_tamanho_mb() + tamanho_mb <= CACHE_ARQUIVOS_MAX_MB:
+                _cache_arquivos_base[arquivo_id] = {
+                    "nome": nome, "dados": dados, "tamanho": len(dados)
+                }
+            buffer.seek(0)
+
+        resposta = send_file(buffer, as_attachment=True, download_name=nome)
+        # Ajuda o navegador do aluno a não rebaixar o mesmo arquivo à toa
+        # (isso sim economiza dado do celular, diferente do cache do servidor).
+        resposta.headers["Cache-Control"] = "private, max-age=3600"
+        return resposta
     except Exception as e:
         flash(f"Erro ao baixar: {e}", "erro")
         return redirect(url_for("inicio"))
