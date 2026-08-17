@@ -141,11 +141,10 @@ def drive_enviar(pasta_id, nome_arquivo, dados_bytes, mimetype):
     servico.files().create(body=meta, media_body=media, fields="id").execute()
 
 
-def drive_obter_ou_criar_pasta(pasta_pai_id, nome_pasta):
+def drive_buscar_subpasta(pasta_pai_id, nome_pasta):
     """Procura uma subpasta com esse nome dentro de `pasta_pai_id`.
 
-    Se já existir (mesmo nome, mesma pasta-pai), reutiliza e devolve o id.
-    Caso contrário, cria a pasta e devolve o id da pasta nova.
+    Devolve o id da subpasta se existir, ou None caso contrário (não cria).
     """
     servico = get_drive()
     nome_escapado = nome_pasta.replace("\\", "\\\\").replace("'", "\\'")
@@ -155,8 +154,19 @@ def drive_obter_ou_criar_pasta(pasta_pai_id, nome_pasta):
     )
     resultado = servico.files().list(q=query, fields="files(id, name)", pageSize=1).execute()
     encontradas = resultado.get("files", [])
-    if encontradas:
-        return encontradas[0]["id"]
+    return encontradas[0]["id"] if encontradas else None
+
+
+def drive_obter_ou_criar_pasta(pasta_pai_id, nome_pasta):
+    """Procura uma subpasta com esse nome dentro de `pasta_pai_id`.
+
+    Se já existir (mesmo nome, mesma pasta-pai), reutiliza e devolve o id.
+    Caso contrário, cria a pasta e devolve o id da pasta nova.
+    """
+    servico = get_drive()
+    encontrada = drive_buscar_subpasta(pasta_pai_id, nome_pasta)
+    if encontrada:
+        return encontrada
 
     meta = {
         "name": nome_pasta,
@@ -419,6 +429,11 @@ PAGINA_INICIO = """
     <div class="emoji">🎮</div>
     <h1>Bem-vindo à aula!</h1>
     <p class="subtitulo">Baixe os arquivos base e envie o seu projeto aqui.</p>
+    {% if aula_atual %}
+      <p class="subtitulo">📅 Aula de hoje: <strong>Aula {{ aula_atual }}</strong></p>
+    {% else %}
+      <p class="subtitulo">📅 O professor ainda não marcou a aula de hoje.</p>
+    {% endif %}
     {% with mensagens = get_flashed_messages(with_categories=true) %}
       {% for categoria, msg in mensagens %}
         <div class="flash {{ categoria }}">{{ msg }}</div>
@@ -435,8 +450,10 @@ PAGINA_INICIO = """
           </li>
         {% endfor %}
       </ul>
+    {% elif not aula_atual %}
+      <p class="subtitulo">Assim que o professor marcar a aula de hoje, os arquivos aparecem aqui.</p>
     {% else %}
-      <p class="subtitulo">Nenhum arquivo base disponível ainda.</p>
+      <p class="subtitulo">Nenhum arquivo base disponível ainda para a Aula {{ aula_atual }}.</p>
     {% endif %}
   </div>
 
@@ -592,14 +609,19 @@ def admin():
 @app.route("/")
 @login_obrigatorio
 def inicio():
+    aula_atual = obter_aula_atual()
+    arquivos_base = []
     try:
-        arquivos_base = drive_listar(DRIVE_PASTA_BASE)
+        if aula_atual and DRIVE_PASTA_BASE:
+            pasta_aula_id = drive_buscar_subpasta(DRIVE_PASTA_BASE, f"Aula {aula_atual}")
+            if pasta_aula_id:
+                arquivos_base = drive_listar(pasta_aula_id)
     except Exception as e:
-        arquivos_base = []
         flash(f"Não consegui listar os arquivos base: {e}", "erro")
     return render_template_string(
         PAGINA_INICIO,
         css=BASE_CSS,
+        aula_atual=aula_atual,
         arquivos_base=arquivos_base,
         tipos_projeto=list(TIPOS_PROJETO.keys()),
         tipo_projeto_padrao=TIPO_PROJETO_PADRAO,
