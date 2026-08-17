@@ -383,6 +383,50 @@ BASE_CSS = f"""
   .flash.erro {{ background: #fee2e2; border-color: #ef4444; }}
   .rodape {{ color: #9ca3af; font-size: .85rem; text-align: center; }}
   .emoji {{ font-size: 2.4rem; }}
+  .tutorial {{ list-style: none; counter-reset: passo; }}
+  .tutorial li {{
+    counter-increment: passo;
+    position: relative;
+    padding: 14px 16px 14px 56px;
+    border: 2px solid #f3f4f6;
+    border-radius: 14px;
+    margin-bottom: 10px;
+  }}
+  .tutorial li::before {{
+    content: counter(passo);
+    position: absolute;
+    left: 14px;
+    top: 14px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--roxo);
+    color: #fff;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .95rem;
+  }}
+  .tutorial strong {{ color: #1f2937; }}
+  .caminho {{
+    display: inline-block;
+    background: #f3f4f6;
+    color: var(--roxo);
+    font-weight: 800;
+    padding: 4px 10px;
+    border-radius: 8px;
+    margin: 4px 0;
+    font-size: .95rem;
+  }}
+  .dica {{
+    background: #fff7ed;
+    border-left: 5px solid var(--laranja);
+    padding: 10px 14px;
+    border-radius: 10px;
+    margin-top: 8px;
+    font-size: .92rem;
+  }}
 """
 
 PAGINA_LOGIN = """
@@ -455,6 +499,29 @@ PAGINA_INICIO = """
     {% else %}
       <p class="subtitulo">Nenhum arquivo base disponível ainda para a Aula {{ aula_atual }}.</p>
     {% endif %}
+  </div>
+
+  <div class="cartao">
+    <h2>💾 Como salvar meu projeto?</h2>
+    <p class="subtitulo">Antes de enviar, você precisa salvar o seu projeto do Scratch no computador. Siga os passos:</p>
+    <ol class="tutorial">
+      <li>
+        No editor do Scratch, procure o menu <strong>Arquivo</strong> lá em cima, no canto esquerdo da tela.<br>
+        <span class="caminho">📁 Arquivo</span>
+      </li>
+      <li>
+        Clique em <strong>Arquivo</strong> e depois em <strong>Baixar para o seu computador</strong>.<br>
+        <span class="caminho">📁 Arquivo → 💾 Baixar para o seu computador</span>
+      </li>
+      <li>
+        Pronto! O Scratch vai salvar um arquivo que termina com <strong>.sb3</strong>.
+        Esse arquivo normalmente vai para a pasta <strong>Downloads</strong> do seu computador.
+        <div class="dica">💡 Dica: se não souber onde ficou, procure na pasta <strong>Downloads</strong> pelo arquivo mais novo terminando em <strong>.sb3</strong>.</div>
+      </li>
+      <li>
+        Agora é só descer até <strong>"Enviar o meu projeto"</strong> aqui embaixo, escolher esse arquivo <strong>.sb3</strong> e enviar. 🎉
+      </li>
+    </ol>
   </div>
 
   <div class="cartao">
