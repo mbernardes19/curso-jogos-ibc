@@ -59,6 +59,15 @@ EXTENSOES_OK = {".sb3", ".sb2", ".png", ".jpg", ".jpeg", ".zip"}
 TAMANHO_MAX_MB = 25
 app.config["MAX_CONTENT_LENGTH"] = TAMANHO_MAX_MB * 1024 * 1024
 
+# Tipos de projeto disponíveis no formulário de envio e a subpasta (dentro da
+# pasta do aluno) correspondente a cada um.
+TIPOS_PROJETO = {
+    "Projeto em aula": "Aula",
+    "Tarefa de casa": "Casa",
+    "Projeto final": "Final",
+}
+TIPO_PROJETO_PADRAO = "Projeto em aula"
+
 # Paleta do curso (roxo / laranja / verde-limão) — mesma identidade das aulas
 COR_ROXO = "#7c3aed"
 COR_LARANJA = "#f97316"
@@ -214,14 +223,16 @@ BASE_CSS = f"""
   h2 {{ color: var(--laranja); font-size: 1.2rem; margin: 20px 0 12px; }}
   .subtitulo {{ color: #6b7280; margin-bottom: 20px; }}
   label {{ display: block; font-weight: 700; margin: 14px 0 6px; color: #374151; }}
-  input[type=text], input[type=password], input[type=file] {{
+  input[type=text], input[type=password], input[type=file], select {{
     width: 100%;
     padding: 14px;
     border: 2px solid #e5e7eb;
     border-radius: 14px;
     font-size: 1rem;
+    font-family: inherit;
+    background: #fff;
   }}
-  input:focus {{ outline: none; border-color: var(--roxo); }}
+  input:focus, select:focus {{ outline: none; border-color: var(--roxo); }}
   button {{
     background: var(--roxo);
     color: #fff;
@@ -341,6 +352,13 @@ PAGINA_INICIO = """
       <label for="nome">Seu nome</label>
       <input type="text" id="nome" name="nome" placeholder="Ex: Ana Clara" required>
 
+      <label for="tipo_projeto">Tipo de projeto</label>
+      <select id="tipo_projeto" name="tipo_projeto">
+        {% for tipo in tipos_projeto %}
+          <option value="{{ tipo }}" {% if tipo == tipo_projeto_padrao %}selected{% endif %}>{{ tipo }}</option>
+        {% endfor %}
+      </select>
+
       <label for="arquivo">Arquivo do projeto (.sb3)</label>
       <input type="file" id="arquivo" name="arquivo" accept=".sb3,.sb2,.png,.jpg,.jpeg,.zip" required>
 
@@ -384,7 +402,13 @@ def inicio():
     except Exception as e:
         arquivos_base = []
         flash(f"Não consegui listar os arquivos base: {e}", "erro")
-    return render_template_string(PAGINA_INICIO, css=BASE_CSS, arquivos_base=arquivos_base)
+    return render_template_string(
+        PAGINA_INICIO,
+        css=BASE_CSS,
+        arquivos_base=arquivos_base,
+        tipos_projeto=list(TIPOS_PROJETO.keys()),
+        tipo_projeto_padrao=TIPO_PROJETO_PADRAO,
+    )
 
 
 @app.route("/enviar", methods=["POST"])
@@ -392,6 +416,10 @@ def inicio():
 def enviar():
     nome_aluno = limpar_nome(request.form.get("nome", ""))
     arquivo = request.files.get("arquivo")
+    tipo_projeto = request.form.get("tipo_projeto", TIPO_PROJETO_PADRAO)
+    if tipo_projeto not in TIPOS_PROJETO:
+        tipo_projeto = TIPO_PROJETO_PADRAO
+    nome_subpasta = TIPOS_PROJETO[tipo_projeto]
 
     if not arquivo or arquivo.filename == "":
         flash("Você precisa escolher um arquivo.", "erro")
@@ -408,8 +436,9 @@ def enviar():
 
     try:
         pasta_aluno_id = drive_obter_ou_criar_pasta(DRIVE_PASTA_UPLOADS, nome_aluno)
+        pasta_tipo_id = drive_obter_ou_criar_pasta(pasta_aluno_id, nome_subpasta)
         dados = arquivo.read()
-        drive_enviar(pasta_aluno_id, nome_final, dados, arquivo.mimetype or "application/octet-stream")
+        drive_enviar(pasta_tipo_id, nome_final, dados, arquivo.mimetype or "application/octet-stream")
         flash(f"Projeto enviado com sucesso! 🎉 ({nome_final})", "sucesso")
     except Exception as e:
         flash(f"Erro ao enviar: {e}", "erro")
