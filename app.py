@@ -305,7 +305,7 @@ BASE_CSS = f"""
   }}
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{
-    font-family: 'Nunito', 'Segoe UI', system-ui, sans-serif;
+    font-family: 'Arimo', 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif;
     background: linear-gradient(135deg, #faf5ff 0%, #fff7ed 100%);
     color: #1f2937;
     min-height: 100vh;
@@ -467,7 +467,10 @@ PAGINA_LOGIN = """
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Curso de Programação — Entrar</title>
-  <style>{{ css }}</style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Arimo:ital,wght@0,400;0,700;0,800;1,400&display=swap" rel="stylesheet">
+  <style>{{ css|safe }}</style>
 </head>
 <body>
   <div class="cartao">
@@ -497,7 +500,10 @@ PAGINA_INICIO = """
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Curso de Programação</title>
-  <style>{{ css }}</style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Arimo:ital,wght@0,400;0,700;0,800;1,400&display=swap" rel="stylesheet">
+  <style>{{ css|safe }}</style>
 </head>
 <body>
   <div class="cartao">
@@ -618,7 +624,10 @@ PAGINA_ADMIN_LOGIN = """
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Painel do professor — Entrar</title>
-  <style>{{ css }}</style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Arimo:ital,wght@0,400;0,700;0,800;1,400&display=swap" rel="stylesheet">
+  <style>{{ css|safe }}</style>
 </head>
 <body>
   <div class="cartao">
@@ -647,7 +656,10 @@ PAGINA_ADMIN = """
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Painel do professor</title>
-  <style>{{ css }}</style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Arimo:ital,wght@0,400;0,700;0,800;1,400&display=swap" rel="stylesheet">
+  <style>{{ css|safe }}</style>
 </head>
 <body>
   <div class="cartao">
