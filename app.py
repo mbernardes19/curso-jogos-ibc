@@ -19,6 +19,11 @@ Variáveis de ambiente necessárias (configuradas no painel do Render):
   GOOGLE_REFRESH_TOKEN   -> refresh token da SUA conta (gerado por gerar_token.py)
   DRIVE_PASTA_UPLOADS    -> ID da pasta do Drive onde os projetos enviados são salvos
   DRIVE_PASTA_BASE       -> ID da pasta do Drive com os arquivos base p/ download
+  ADMIN_SENHA            -> senha do painel /admin (definir o número da aula do dia)
+
+Número da aula atual: fica salvo num arquivinho de texto dentro da pasta do
+Drive de DRIVE_PASTA_UPLOADS (sobrevive a reinícios do Render, que apaga o
+disco local). Você define pelo painel /admin, sem precisar fazer deploy.
 
 Autenticação: usa OAuth com refresh token (delegação), então os arquivos
 enviados vão para a SUA cota pessoal do Drive (15 GB+). Isso contorna o erro
@@ -30,6 +35,7 @@ import os
 import io
 import json
 import re
+import time
 import datetime
 from functools import wraps
 
@@ -51,8 +57,15 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", "troque-isto-em-producao")
 
 SENHA_TURMA = os.environ.get("SENHA_TURMA", "cookies2026")
+ADMIN_SENHA = os.environ.get("ADMIN_SENHA", "troque-a-senha-admin")
 DRIVE_PASTA_UPLOADS = os.environ.get("DRIVE_PASTA_UPLOADS", "")
 DRIVE_PASTA_BASE = os.environ.get("DRIVE_PASTA_BASE", "")
+
+# Nome do arquivinho de texto (dentro de DRIVE_PASTA_UPLOADS) que guarda o
+# número da aula atual. Fica no Drive (e não no disco do Render) porque o
+# disco do Render é efêmero e o valor se perderia a cada reinício/deploy.
+ARQUIVO_CONFIG_AULA = "_config_aula_atual.txt"
+CACHE_AULA_TTL_SEGUNDOS = 30
 
 # Extensões permitidas no upload (projetos Scratch e afins)
 EXTENSOES_OK = {".sb3", ".sb2", ".png", ".jpg", ".jpeg", ".zip"}
@@ -168,6 +181,78 @@ def drive_baixar(arquivo_id):
     return buffer, meta["name"]
 
 
+def _drive_buscar_arquivo(pasta_id, nome_arquivo):
+    """Procura um arquivo pelo nome dentro de uma pasta. Devolve o id ou None."""
+    servico = get_drive()
+    nome_escapado = nome_arquivo.replace("\\", "\\\\").replace("'", "\\'")
+    query = f"'{pasta_id}' in parents and name = '{nome_escapado}' and trashed = false"
+    resultado = servico.files().list(q=query, fields="files(id)", pageSize=1).execute()
+    encontrados = resultado.get("files", [])
+    return encontrados[0]["id"] if encontrados else None
+
+
+def drive_ler_texto(pasta_id, nome_arquivo):
+    """Lê o conteúdo (texto) de um arquivo pequeno numa pasta do Drive.
+
+    Devolve None se a pasta não estiver configurada ou o arquivo não existir.
+    """
+    if not pasta_id:
+        return None
+    arquivo_id = _drive_buscar_arquivo(pasta_id, nome_arquivo)
+    if not arquivo_id:
+        return None
+    buffer, _ = drive_baixar(arquivo_id)
+    return buffer.read().decode("utf-8").strip()
+
+
+def drive_escrever_texto(pasta_id, nome_arquivo, conteudo):
+    """Cria ou substitui o conteúdo de um arquivo de texto pequeno no Drive."""
+    if not pasta_id:
+        raise RuntimeError("DRIVE_PASTA_UPLOADS não está configurada.")
+    servico = get_drive()
+    media = MediaIoBaseUpload(
+        io.BytesIO(conteudo.encode("utf-8")), mimetype="text/plain", resumable=False
+    )
+    arquivo_id = _drive_buscar_arquivo(pasta_id, nome_arquivo)
+    if arquivo_id:
+        servico.files().update(fileId=arquivo_id, media_body=media).execute()
+    else:
+        meta = {"name": nome_arquivo, "parents": [pasta_id]}
+        servico.files().create(body=meta, media_body=media, fields="id").execute()
+
+
+# --------------------------------------------------------------------------
+# Aula atual (cache em memória por cima do arquivo no Drive)
+# --------------------------------------------------------------------------
+
+_cache_aula = {"valor": None, "expira": 0}
+
+
+def obter_aula_atual():
+    """Devolve o número da aula atual (string) ou None se não estiver definido.
+
+    Usa um cache em memória de alguns segundos para não bater no Drive a cada
+    requisição; se a leitura do Drive falhar, mantém o último valor conhecido.
+    """
+    agora = time.time()
+    if _cache_aula["expira"] > agora:
+        return _cache_aula["valor"]
+    try:
+        valor = drive_ler_texto(DRIVE_PASTA_UPLOADS, ARQUIVO_CONFIG_AULA) or None
+        _cache_aula["valor"] = valor
+    except Exception:
+        pass  # mantém o último valor conhecido em caso de erro passageiro
+    _cache_aula["expira"] = agora + CACHE_AULA_TTL_SEGUNDOS
+    return _cache_aula["valor"]
+
+
+def definir_aula_atual(valor):
+    """Salva o número da aula atual no Drive e já atualiza o cache local."""
+    drive_escrever_texto(DRIVE_PASTA_UPLOADS, ARQUIVO_CONFIG_AULA, valor or "")
+    _cache_aula["valor"] = valor or None
+    _cache_aula["expira"] = time.time() + CACHE_AULA_TTL_SEGUNDOS
+
+
 # --------------------------------------------------------------------------
 # Utilidades
 # --------------------------------------------------------------------------
@@ -185,6 +270,15 @@ def login_obrigatorio(f):
     def wrapper(*args, **kwargs):
         if not session.get("autenticado"):
             return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def admin_obrigatorio(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get("admin_autenticado"):
+            return redirect(url_for("admin_login"))
         return f(*args, **kwargs)
     return wrapper
 
@@ -373,6 +467,74 @@ PAGINA_INICIO = """
 </html>
 """
 
+PAGINA_ADMIN_LOGIN = """
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Painel do professor — Entrar</title>
+  <style>{{ css }}</style>
+</head>
+<body>
+  <div class="cartao">
+    <div class="emoji">🧑‍🏫</div>
+    <h1>Painel do professor</h1>
+    <p class="subtitulo">Digite a senha do painel para definir a aula do dia.</p>
+    {% with mensagens = get_flashed_messages(with_categories=true) %}
+      {% for categoria, msg in mensagens %}
+        <div class="flash {{ categoria }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+    <form method="post">
+      <label for="senha">Senha do painel</label>
+      <input type="password" id="senha" name="senha" autofocus required>
+      <button type="submit">Entrar 🚀</button>
+    </form>
+  </div>
+</body>
+</html>
+"""
+
+PAGINA_ADMIN = """
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Painel do professor</title>
+  <style>{{ css }}</style>
+</head>
+<body>
+  <div class="cartao">
+    <div class="emoji">🧑‍🏫</div>
+    <h1>Aula atual</h1>
+    <p class="subtitulo">
+      {% if aula_atual %}
+        Aula marcada agora: <strong>{{ aula_atual }}</strong>
+        (os arquivos enviados ficam com "_aula{{ aula_atual }}_" no nome).
+      {% else %}
+        Nenhuma aula definida no momento — os arquivos enviados não recebem marcação de aula.
+      {% endif %}
+    </p>
+    {% with mensagens = get_flashed_messages(with_categories=true) %}
+      {% for categoria, msg in mensagens %}
+        <div class="flash {{ categoria }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+    <form method="post">
+      <label for="aula">Número da aula de hoje</label>
+      <input type="text" id="aula" name="aula" placeholder="Ex: 3" value="{{ aula_atual or '' }}" inputmode="numeric">
+      <button type="submit">Salvar aula ✅</button>
+    </form>
+  </div>
+  <p class="rodape">
+    <a href="{{ url_for('admin_sair') }}" style="color:#9ca3af;">Sair do painel</a>
+  </p>
+</body>
+</html>
+"""
+
 
 # --------------------------------------------------------------------------
 # Rotas
@@ -392,6 +554,39 @@ def login():
 def sair():
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
+    if request.method == "POST":
+        if request.form.get("senha") == ADMIN_SENHA:
+            session["admin_autenticado"] = True
+            return redirect(url_for("admin"))
+        flash("Senha incorreta. Tente de novo!", "erro")
+    return render_template_string(PAGINA_ADMIN_LOGIN, css=BASE_CSS)
+
+
+@app.route("/admin/sair")
+def admin_sair():
+    session.pop("admin_autenticado", None)
+    return redirect(url_for("admin_login"))
+
+
+@app.route("/admin", methods=["GET", "POST"])
+@admin_obrigatorio
+def admin():
+    if request.method == "POST":
+        valor = request.form.get("aula", "").strip()
+        if valor and not valor.isdigit():
+            flash("O número da aula deve conter só dígitos (ou deixe vazio para remover).", "erro")
+        else:
+            try:
+                definir_aula_atual(valor)
+                flash("Aula atual atualizada! 🎉" if valor else "Marcação de aula removida.", "sucesso")
+            except Exception as e:
+                flash(f"Erro ao salvar: {e}", "erro")
+        return redirect(url_for("admin"))
+    return render_template_string(PAGINA_ADMIN, css=BASE_CSS, aula_atual=obter_aula_atual())
 
 
 @app.route("/")
@@ -430,9 +625,12 @@ def enviar():
         flash(f"Tipo de arquivo não permitido ({ext}).", "erro")
         return redirect(url_for("inicio"))
 
-    # Nome final: NomeDoAluno_projeto_AAAAMMDD_HHMM.sb3 (horário de Brasília, GMT-3)
+    # Nome final: NomeDoAluno_projeto_aula3_AAAAMMDD_HHMM.sb3 (horário de Brasília, GMT-3)
+    # O "_aula3_" só aparece se o professor tiver definido a aula atual em /admin.
+    aula_atual = obter_aula_atual()
+    marca_aula = f"_aula{aula_atual}" if aula_atual else ""
     carimbo = datetime.datetime.now(TZ_BRASIL).strftime("%Y%m%d_%H%M")
-    nome_final = f"{nome_aluno}_projeto_{carimbo}{ext}"
+    nome_final = f"{nome_aluno}_projeto{marca_aula}_{carimbo}{ext}"
 
     try:
         pasta_aluno_id = drive_obter_ou_criar_pasta(DRIVE_PASTA_UPLOADS, nome_aluno)
