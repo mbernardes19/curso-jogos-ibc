@@ -59,8 +59,10 @@ app.secret_key = os.environ.get("FLASK_SECRET", "troque-isto-em-producao")
 
 SENHA_TURMA = os.environ.get("SENHA_TURMA", "cookies2026")
 ADMIN_SENHA = os.environ.get("ADMIN_SENHA", "troque-a-senha-admin")
+SENHA_RESPONSAVEIS = os.environ.get("SENHA_RESPONSAVEIS", "pais2026")
 DRIVE_PASTA_UPLOADS = os.environ.get("DRIVE_PASTA_UPLOADS", "")
 DRIVE_PASTA_BASE = os.environ.get("DRIVE_PASTA_BASE", "")
+DRIVE_PASTA_GABARITOS = os.environ.get("DRIVE_PASTA_GABARITOS", "")
 
 # Nome do arquivinho de texto (dentro de DRIVE_PASTA_UPLOADS) que guarda o
 # número da aula atual. Fica no Drive (e não no disco do Render) porque o
@@ -329,6 +331,15 @@ def admin_obrigatorio(f):
     def wrapper(*args, **kwargs):
         if not session.get("admin_autenticado"):
             return redirect(url_for("admin_login"))
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def responsavel_obrigatorio(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get("responsavel_autenticado"):
+            return redirect(url_for("gabaritos_login"))
         return f(*args, **kwargs)
     return wrapper
 
@@ -657,6 +668,123 @@ PAGINA_INICIO = """
 </html>
 """
 
+PAGINA_GABARITOS_LOGIN = """
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gabaritos — Entrar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Arimo:ital,wght@0,400;0,700;0,800;1,400&display=swap" rel="stylesheet">
+  <style>{{ css|safe }}</style>
+</head>
+<body>
+  <div class="cartao">
+    <div class="emoji">📋🔒</div>
+    <h1>Gabaritos</h1>
+    <p class="subtitulo">Digite a senha dos responsáveis para acessar os gabaritos.</p>
+    {% with mensagens = get_flashed_messages(with_categories=true) %}
+      {% for categoria, msg in mensagens %}
+        <div class="flash {{ categoria }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+    <form method="post">
+      <label for="senha">Senha dos responsáveis</label>
+      <input type="password" id="senha" name="senha" autofocus required>
+      <button type="submit">Entrar 🚀</button>
+    </form>
+  </div>
+  <p class="rodape">Área exclusiva para responsáveis 💜</p>
+</body>
+</html>
+"""
+
+PAGINA_GABARITOS = """
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gabaritos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Arimo:ital,wght@0,400;0,700;0,800;1,400&display=swap" rel="stylesheet">
+  <style>{{ css|safe }}</style>
+</head>
+<body>
+  <div class="cartao">
+    <div class="emoji">📋</div>
+    <h1>Gabaritos</h1>
+    <p class="subtitulo">Escolha uma aula para ver os gabaritos disponíveis.</p>
+    {% with mensagens = get_flashed_messages(with_categories=true) %}
+      {% for categoria, msg in mensagens %}
+        <div class="flash {{ categoria }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% if pastas %}
+      <ul class="lista-arquivos">
+        {% for pasta in pastas %}
+          <li>
+            <span>📁 {{ pasta.name }}</span>
+            <a href="{{ url_for('gabaritos_pasta', pasta_id=pasta.id) }}">Abrir</a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="subtitulo">Nenhum gabarito disponível no momento.</p>
+    {% endif %}
+  </div>
+  <p class="rodape">
+    <a href="{{ url_for('gabaritos_sair') }}" style="color:#9ca3af;">Sair</a>
+  </p>
+</body>
+</html>
+"""
+
+PAGINA_GABARITOS_PASTA = """
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gabaritos — {{ nome_pasta }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Arimo:ital,wght@0,400;0,700;0,800;1,400&display=swap" rel="stylesheet">
+  <style>{{ css|safe }}</style>
+</head>
+<body>
+  <div class="cartao">
+    <div class="emoji">📄</div>
+    <h1>{{ nome_pasta }}</h1>
+    <p class="subtitulo">Arquivos disponíveis neste gabarito:</p>
+    {% with mensagens = get_flashed_messages(with_categories=true) %}
+      {% for categoria, msg in mensagens %}
+        <div class="flash {{ categoria }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% if arquivos %}
+      <ul class="lista-arquivos">
+        {% for arq in arquivos %}
+          <li>
+            <span>📄 {{ arq.name }}</span>
+            <a href="{{ url_for('gabaritos_baixar', arquivo_id=arq.id) }}">Baixar</a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="subtitulo">Nenhum arquivo nesta pasta ainda.</p>
+    {% endif %}
+  </div>
+  <p class="rodape">
+    <a href="{{ url_for('gabaritos') }}" style="color:#9ca3af;">← Voltar aos gabaritos</a>
+  </p>
+</body>
+</html>
+"""
+
 PAGINA_ADMIN_LOGIN = """
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -911,6 +1039,78 @@ def baixar(arquivo_id):
     except Exception as e:
         flash(f"Erro ao baixar: {e}", "erro")
         return redirect(url_for("inicio"))
+
+
+# --------------------------------------------------------------------------
+# Rotas — Gabaritos (responsáveis)
+# --------------------------------------------------------------------------
+
+@app.route("/gabaritos/login", methods=["GET", "POST"])
+def gabaritos_login():
+    if request.method == "POST":
+        if request.form.get("senha") == SENHA_RESPONSAVEIS:
+            session["responsavel_autenticado"] = True
+            return redirect(url_for("gabaritos"))
+        flash("Senha incorreta. Tente de novo!", "erro")
+    return render_template_string(PAGINA_GABARITOS_LOGIN, css=BASE_CSS)
+
+
+@app.route("/gabaritos/sair")
+def gabaritos_sair():
+    session.pop("responsavel_autenticado", None)
+    return redirect(url_for("gabaritos_login"))
+
+
+@app.route("/gabaritos")
+@responsavel_obrigatorio
+def gabaritos():
+    pastas = []
+    try:
+        if DRIVE_PASTA_GABARITOS:
+            servico = get_drive()
+            resultado = servico.files().list(
+                q=f"'{DRIVE_PASTA_GABARITOS}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+                fields="files(id, name)",
+                orderBy="name",
+                pageSize=100,
+            ).execute()
+            pastas = resultado.get("files", [])
+    except Exception as e:
+        flash(f"Erro ao listar gabaritos: {e}", "erro")
+    return render_template_string(PAGINA_GABARITOS, css=BASE_CSS, pastas=pastas)
+
+
+@app.route("/gabaritos/<pasta_id>")
+@responsavel_obrigatorio
+def gabaritos_pasta(pasta_id):
+    arquivos = []
+    nome_pasta = "Gabarito"
+    try:
+        servico = get_drive()
+        meta = servico.files().get(fileId=pasta_id, fields="name, parents").execute()
+        # Verifica que a pasta é filha de DRIVE_PASTA_GABARITOS
+        if DRIVE_PASTA_GABARITOS not in meta.get("parents", []):
+            abort(403)
+        nome_pasta = meta["name"]
+        arquivos = drive_listar(pasta_id)
+    except Exception as e:
+        flash(f"Erro ao listar arquivos: {e}", "erro")
+    return render_template_string(
+        PAGINA_GABARITOS_PASTA, css=BASE_CSS, arquivos=arquivos, nome_pasta=nome_pasta
+    )
+
+
+@app.route("/gabaritos/baixar/<arquivo_id>")
+@responsavel_obrigatorio
+def gabaritos_baixar(arquivo_id):
+    try:
+        buffer, nome = drive_baixar(arquivo_id)
+        resposta = send_file(buffer, as_attachment=True, download_name=nome)
+        resposta.headers["Cache-Control"] = "private, max-age=3600"
+        return resposta
+    except Exception as e:
+        flash(f"Erro ao baixar: {e}", "erro")
+        return redirect(url_for("gabaritos"))
 
 
 @app.route("/saude")
