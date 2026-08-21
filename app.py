@@ -527,6 +527,23 @@ BASE_CSS = f"""
     vertical-align: middle;
   }}
   @keyframes girar {{ to {{ transform: rotate(360deg); }} }}
+  button.enviando {{
+    pointer-events: none;
+    opacity: .7;
+    background: #9ca3af;
+  }}
+  button.enviando::after {{
+    content: '';
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-left: 10px;
+    border: 2.5px solid #fff;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: girar .6s linear infinite;
+    vertical-align: middle;
+  }}
 """
 
 PAGINA_LOGIN = """
@@ -623,7 +640,7 @@ PAGINA_INICIO = """
       <label for="arquivo">Arquivo do projeto (.sb3)</label>
       <input type="file" id="arquivo" name="arquivo" accept=".sb3" required>
 
-      <button type="submit" class="botao-limao">Enviar projeto ✨</button>
+      <button type="submit" class="botao-limao" id="btn-enviar">Enviar projeto ✨</button>
     </form>
   </div>
 
@@ -706,6 +723,14 @@ PAGINA_INICIO = """
       });
     });
   });
+  var form=document.querySelector('form[action]');
+  var btnEnviar=document.getElementById('btn-enviar');
+  if(form&&btnEnviar){
+    form.addEventListener('submit',function(){
+      btnEnviar.classList.add('enviando');
+      btnEnviar.textContent='Enviando\u2026';
+    });
+  }
   </script>
 </body>
 </html>
