@@ -509,6 +509,24 @@ BASE_CSS = f"""
   .acordeon[open] > summary::after {{ transform: rotate(90deg); }}
   .acordeon > summary:hover {{ background: #faf5ff; }}
   .acordeon > .conteudo-acordeon {{ padding: 0 20px 20px; }}
+  .lista-arquivos a.baixando {{
+    pointer-events: none;
+    opacity: .6;
+    background: #9ca3af;
+  }}
+  .lista-arquivos a.baixando::after {{
+    content: '';
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-left: 8px;
+    border: 2px solid #fff;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: girar .6s linear infinite;
+    vertical-align: middle;
+  }}
+  @keyframes girar {{ to {{ transform: rotate(360deg); }} }}
 """
 
 PAGINA_LOGIN = """
@@ -578,7 +596,7 @@ PAGINA_INICIO = """
         {% for arq in arquivos_base %}
           <li>
             <span>📄 {{ arq.name }}</span>
-            <a href="{{ url_for('baixar', arquivo_id=arq.id) }}">Baixar</a>
+            <a href="{{ url_for('baixar', arquivo_id=arq.id) }}" class="btn-baixar">Baixar</a>
           </li>
         {% endfor %}
       </ul>
@@ -664,6 +682,31 @@ PAGINA_INICIO = """
   <p class="rodape">
     <a href="{{ url_for('sair') }}" style="color:#9ca3af;">Sair</a>
   </p>
+  <script>
+  document.querySelectorAll('.btn-baixar').forEach(function(btn){
+    btn.addEventListener('click', function(e){
+      if(btn.classList.contains('baixando')) { e.preventDefault(); return; }
+      e.preventDefault();
+      btn.classList.add('baixando');
+      btn.textContent='Baixando';
+      fetch(btn.href).then(function(r){
+        var nome='';
+        var cd=r.headers.get('content-disposition');
+        if(cd){var m=cd.match(/filename\*?=['"]?(?:UTF-8'')?([^;'"]+)/i);if(m)nome=decodeURIComponent(m[1]);}
+        return r.blob().then(function(b){return{blob:b,nome:nome};});
+      }).then(function(o){
+        var a=document.createElement('a');
+        a.href=URL.createObjectURL(o.blob);
+        a.download=o.nome||'arquivo';
+        document.body.appendChild(a);a.click();a.remove();
+        URL.revokeObjectURL(a.href);
+      }).catch(function(){}).finally(function(){
+        btn.classList.remove('baixando');
+        btn.textContent='Baixar';
+      });
+    });
+  });
+  </script>
 </body>
 </html>
 """
@@ -770,7 +813,7 @@ PAGINA_GABARITOS_PASTA = """
         {% for arq in arquivos %}
           <li>
             <span>📄 {{ arq.name }}</span>
-            <a href="{{ url_for('gabaritos_baixar', arquivo_id=arq.id) }}">Baixar</a>
+            <a href="{{ url_for('gabaritos_baixar', arquivo_id=arq.id) }}" class="btn-baixar">Baixar</a>
           </li>
         {% endfor %}
       </ul>
@@ -781,6 +824,31 @@ PAGINA_GABARITOS_PASTA = """
   <p class="rodape">
     <a href="{{ url_for('gabaritos') }}" style="color:#9ca3af;">← Voltar aos gabaritos</a>
   </p>
+  <script>
+  document.querySelectorAll('.btn-baixar').forEach(function(btn){
+    btn.addEventListener('click', function(e){
+      if(btn.classList.contains('baixando')) { e.preventDefault(); return; }
+      e.preventDefault();
+      btn.classList.add('baixando');
+      btn.textContent='Baixando';
+      fetch(btn.href).then(function(r){
+        var nome='';
+        var cd=r.headers.get('content-disposition');
+        if(cd){var m=cd.match(/filename\*?=['"]?(?:UTF-8'')?([^;'"]+)/i);if(m)nome=decodeURIComponent(m[1]);}
+        return r.blob().then(function(b){return{blob:b,nome:nome};});
+      }).then(function(o){
+        var a=document.createElement('a');
+        a.href=URL.createObjectURL(o.blob);
+        a.download=o.nome||'arquivo';
+        document.body.appendChild(a);a.click();a.remove();
+        URL.revokeObjectURL(a.href);
+      }).catch(function(){}).finally(function(){
+        btn.classList.remove('baixando');
+        btn.textContent='Baixar';
+      });
+    });
+  });
+  </script>
 </body>
 </html>
 """
