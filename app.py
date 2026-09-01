@@ -247,6 +247,7 @@ def obter_aula_atual():
     Usa um cache em memória de alguns segundos para não bater no Drive a cada
     requisição; se a leitura do Drive falhar, mantém o último valor conhecido.
     """
+    return 5
     agora = time.time()
     if _cache_aula["expira"] > agora:
         return _cache_aula["valor"]
