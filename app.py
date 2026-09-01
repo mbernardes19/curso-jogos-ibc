@@ -261,7 +261,7 @@ def obter_aula_atual():
 
 def definir_aula_atual(valor):
     """Salva o número da aula atual no Drive e já atualiza o cache local."""
-    drive_escrever_texto(DRIVE_PASTA_UPLOADS, ARQUIVO_CONFIG_AULA, valor or "")
+    drive_escrever_texto(DRIVE_PASTA_UPLOADS, ARQUIVO_CONFIG_AULA, valor or "5")
     _cache_aula["valor"] = valor or None
     _cache_aula["expira"] = time.time() + CACHE_AULA_TTL_SEGUNDOS
 
